@@ -196,7 +196,7 @@
       <code>中国語の文</code><br>
       <code>ピン音</code><br>
       <code>日本語訳</code><br>
-      例文と例文の間は<strong>空行</strong>で区切ります。
+      例文と例文の間の空行はあってもなくても大丈夫です。
     </div>
     <textarea id="inputArea" placeholder="教室里没有教师。
 Jiàoshì li méiyǒu jiàoshī.
@@ -278,16 +278,17 @@ function loadSample() {
 }
 
 function parse(raw) {
-  const blocks = raw.split(/\n[ \t]*\n/).map(b => b.trim()).filter(Boolean);
+  // 空行を除いた全行を取得（空行あり・なし両方に対応）
+  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
   const errors = [], results = [];
-  blocks.forEach((block, i) => {
-    const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
-    if (lines.length < 3) {
-      errors.push('例文' + (i+1) + '：行数が足りません（' + lines.length + '行）。中国語・ピン音・日本語の3行が必要です。');
-      return;
-    }
-    results.push({ cn: lines[0], pinyin: lines[1], ja: lines[2] });
-  });
+  if (lines.length < 3) {
+    errors.push('例文が足りません。中国語・ピン音・日本語訳の3行を1セットとして入力してください。');
+    return { results, errors };
+  }
+  // 3行ごとに1例文として読み取る
+  for (let i = 0; i + 2 < lines.length; i += 3) {
+    results.push({ cn: lines[i], pinyin: lines[i+1], ja: lines[i+2] });
+  }
   return { results, errors };
 }
 
