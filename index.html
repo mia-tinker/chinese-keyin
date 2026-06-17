@@ -174,6 +174,17 @@
   .score-big { font-size: 3.5rem; font-weight: 800; color: var(--gold); line-height: 1; }
   .score-sub { font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
   .score-msg { font-size: 1rem; font-weight: 600; margin-top: 12px; }
+
+  /* ローディング */
+  .spinner {
+    display: inline-block; width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: white; border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin-right: 6px; vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -189,26 +200,68 @@
     <h2><span class="badge">1</span> 練習セットのタイトル（任意）</h2>
     <input type="text" class="title-inp" id="titleInput" placeholder="例：文型8・9「没有／什么」練習" />
   </div>
-  <div class="card">
-    <h2><span class="badge">2</span> 例文を貼り付ける</h2>
-    <div class="format-hint">
-      <strong>入力形式（1例文 = 3行）：</strong><br>
-      <code>中国語の文</code><br>
-      <code>ピン音</code><br>
-      <code>日本語訳</code><br>
-      例文と例文の間の空行はあってもなくても大丈夫です。
+
+  <!-- 入力モード切替 -->
+  <div class="mode-tabs" style="margin-bottom:14px;">
+    <button class="mode-tab active" id="modeTabAI" onclick="switchInputMode('ai')">
+      <span class="num">🤖</span>中国語だけ入力
+    </button>
+    <button class="mode-tab" id="modeTabManual" onclick="switchInputMode('manual')">
+      <span class="num">✍️</span>3行セットで入力
+    </button>
+  </div>
+
+  <!-- AI生成モード -->
+  <div id="panelAI">
+    <div class="card">
+      <h2><span class="badge">2</span> Gemini APIキーを入力</h2>
+      <div class="format-hint">
+        <a href="https://aistudio.google.com/apikey" target="_blank" style="color:#5a4a00;font-weight:700;">Google AI Studio</a> でAPIキーを取得してここに貼り付けてください。
+      </div>
+      <input type="password" class="title-inp" id="apiKeyInput" placeholder="AIzaSy..." />
     </div>
-    <textarea id="inputArea" placeholder="教室里没有教师。
+    <div class="card">
+      <h2><span class="badge">3</span> 中国語の例文を入力（1行1文）</h2>
+      <div class="format-hint">
+        中国語の文を1行に1つ入力してください。<br>
+        ピン音と日本語訳はAIが自動で生成します。
+      </div>
+      <textarea id="inputAreaAI" placeholder="教室里没有教师。
+院子里没有小孩儿。
+房间里没有电话。
+这是什么？
+你在做什么？"></textarea>
+      <div id="inputMsgAI" class="msg"></div>
+      <div class="btn-row">
+        <button class="btn btn-ink" id="btnGenerate" onclick="generateWithAI()">🤖 AIで生成して練習スタート</button>
+        <button class="btn btn-muted" onclick="loadSampleAI()">サンプルを読み込む</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 手動入力モード -->
+  <div id="panelManual" style="display:none;">
+    <div class="card">
+      <h2><span class="badge">2</span> 例文を貼り付ける</h2>
+      <div class="format-hint">
+        <strong>入力形式（1例文 = 3行）：</strong><br>
+        <code>中国語の文</code><br>
+        <code>ピン音</code><br>
+        <code>日本語訳</code><br>
+        例文と例文の間の空行はあってもなくても大丈夫です。
+      </div>
+      <textarea id="inputArea" placeholder="教室里没有教师。
 Jiàoshì li méiyǒu jiàoshī.
 教室には先生はいません。
 
 院子里没有小孩儿。
 Yuànzi li méiyǒu xiǎoháir.
 庭には子供はいません。"></textarea>
-    <div id="inputMsg" class="msg"></div>
-    <div class="btn-row">
-      <button class="btn btn-ink" onclick="startPractice()">▶ 練習をスタート</button>
-      <button class="btn btn-muted" onclick="loadSample()">サンプルを読み込む</button>
+      <div id="inputMsg" class="msg"></div>
+      <div class="btn-row">
+        <button class="btn btn-ink" onclick="startPractice()">▶ 練習をスタート</button>
+        <button class="btn btn-muted" onclick="loadSample()">サンプルを読み込む</button>
+      </div>
     </div>
   </div>
 </div>
@@ -275,6 +328,104 @@ function loadSample() {
   document.getElementById('titleInput').value = SAMPLE_TITLE;
   document.getElementById('inputArea').value = SAMPLE;
   document.getElementById('inputMsg').style.display = 'none';
+}
+
+function loadSampleAI() {
+  document.getElementById('titleInput').value = SAMPLE_TITLE;
+  document.getElementById('inputAreaAI').value =
+    '教室里没有教师。\n院子里没有小孩儿。\n房间里没有电话。\n这是什么？\n你在做什么？';
+  document.getElementById('inputMsgAI').style.display = 'none';
+}
+
+function switchInputMode(m) {
+  document.getElementById('panelAI').style.display = m === 'ai' ? 'block' : 'none';
+  document.getElementById('panelManual').style.display = m === 'manual' ? 'block' : 'none';
+  document.getElementById('modeTabAI').classList.toggle('active', m === 'ai');
+  document.getElementById('modeTabManual').classList.toggle('active', m === 'manual');
+}
+
+async function generateWithAI() {
+  const apiKey = document.getElementById('apiKeyInput').value.trim();
+  const raw = document.getElementById('inputAreaAI').value.trim();
+  const msgEl = document.getElementById('inputMsgAI');
+  const btn = document.getElementById('btnGenerate');
+
+  if (!apiKey) { showMsgEl(msgEl, 'error', 'APIキーを入力してください。'); return; }
+  if (!raw) { showMsgEl(msgEl, 'error', '中国語の例文を入力してください。'); return; }
+
+  const cnLines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  if (cnLines.length < 2) { showMsgEl(msgEl, 'error', '例文を2つ以上入力してください。'); return; }
+
+  // ボタンをローディング状態に
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>AIが生成中…';
+  showMsgEl(msgEl, 'success', '⏳ Gemini APIに接続中…');
+
+  try {
+    const prompt = `以下の中国語の文について、それぞれピン音（声調付き）と日本語訳を生成してください。
+必ずJSON配列の形式で返してください。他の文章は一切不要です。
+
+例：
+[
+  {"cn":"你好。","pinyin":"Nǐ hǎo.","ja":"こんにちは。"},
+  {"cn":"谢谢。","pinyin":"Xièxiè.","ja":"ありがとう。"}
+]
+
+中国語リスト：
+${cnLines.map((l, i) => (i+1) + '. ' + l).join('\n')}`;
+
+    const res = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1 }
+        })
+      }
+    );
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || 'APIエラー（ステータス ' + res.status + '）');
+    }
+
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    // JSON部分を抽出
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) throw new Error('AIの返答からJSONを取得できませんでした。');
+    const generated = JSON.parse(jsonMatch[0]);
+
+    if (!Array.isArray(generated) || generated.length === 0) {
+      throw new Error('生成結果が空でした。もう一度お試しください。');
+    }
+
+    sentences = generated;
+    const title = document.getElementById('titleInput').value.trim() || '中国語練習';
+    document.getElementById('headerSub').textContent = title + '　' + sentences.length + '件';
+    document.getElementById('sentCount').textContent = sentences.length + '件の例文';
+    showMsgEl(msgEl, 'success', '✅ ' + sentences.length + '件を生成しました！');
+
+    setTimeout(() => {
+      document.getElementById('screenInput').classList.remove('active');
+      document.getElementById('screenPractice').classList.add('active');
+      setMode('copy');
+    }, 500);
+
+  } catch (e) {
+    showMsgEl(msgEl, 'error', '❌ エラー：' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🤖 AIで生成して練習スタート';
+  }
+}
+
+function showMsgEl(el, type, text) {
+  el.className = 'msg ' + type;
+  el.textContent = text;
+  el.style.display = 'block';
 }
 
 function parse(raw) {
@@ -387,7 +538,7 @@ function renderCopy(area, s) {
     '</div>' + nav() + (allDone()?score():'');
   focusAns();
 }
-function chkCopy() { answered[idx] = document.getElementById('ans').value.trim() === sentences[idx].cn; updateProg(); render(); }
+function chkCopy() { answered[idx] = normalize(document.getElementById('ans').value) === normalize(sentences[idx].cn); updateProg(); render(); }
 function shoCopy() { answered[idx] = true; updateProg(); render(); }
 
 // ② 穴埋め
@@ -407,7 +558,7 @@ function renderBlank(area, s) {
     '</div>' + nav() + (allDone()?score():'');
   focusAns();
 }
-function chkBlank() { const {key} = makeBlank(sentences[idx].cn); answered[idx] = document.getElementById('ans').value.trim() === key; updateProg(); render(); }
+function chkBlank() { const {key} = makeBlank(sentences[idx].cn); answered[idx] = normalize(document.getElementById('ans').value) === normalize(key); updateProg(); render(); }
 function shoBlank() { answered[idx] = true; updateProg(); render(); }
 
 // ③ 全文入力
@@ -425,7 +576,7 @@ function renderFull(area, s) {
     '</div>' + nav() + (allDone()?score():'');
   focusAns();
 }
-function chkFull() { answered[idx] = document.getElementById('ans').value.trim() === sentences[idx].cn; updateProg(); render(); }
+function chkFull() { answered[idx] = normalize(document.getElementById('ans').value) === normalize(sentences[idx].cn); updateProg(); render(); }
 function shoFull() { answered[idx] = true; updateProg(); render(); }
 
 // スコア
@@ -441,6 +592,20 @@ function score() {
     '<button class="btn btn-gold" onclick="setMode(mode)" style="margin-right:8px;">🔄 もう一度</button>' +
     '<button class="btn btn-muted" onclick="backToInput()">例文を変更</button>' +
     '</div></div>';
+}
+
+// 正規化（全角・半角の「？」「！」「。」などの違いを吸収）
+function normalize(s) {
+  return String(s)
+    .trim()
+    // 全角英数字・記号を半角に
+    .replace(/[\uff01-\uff5e]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+    // 全角スペースを半角に
+    .replace(/\u3000/g, ' ')
+    // 連続スペースを1つに
+    .replace(/\s+/g, ' ')
+    // 文末句読点を除去（。？！.?!）
+    .replace(/[。？！.?!]+$/, '');
 }
 
 // ユーティリティ
