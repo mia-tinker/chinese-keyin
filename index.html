@@ -131,6 +131,22 @@
   .card-meta { font-size: 0.7rem; color: var(--muted); margin-bottom: 8px; }
   .ja-text { font-size: 0.95rem; color: var(--muted); margin-bottom: 10px; line-height: 1.6; }
   .cn-big { font-size: 1.35rem; font-weight: 500; letter-spacing: 0.05em; margin-bottom: 6px; line-height: 1.8; }
+  .cn-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .cn-row .cn-big { margin-bottom: 0; }
+  .btn-speak {
+    flex-shrink: 0;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1.5px solid var(--gold);
+    background: var(--gold-light);
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .btn-speak:active { transform: scale(0.9); background: var(--gold); }
+  .btn-speak.speaking { background: var(--gold); animation: pulse 0.8s ease infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
   .py-text { font-size: 0.85rem; color: var(--blue); margin-bottom: 14px; }
 
   .blank-line { font-size: 1.1rem; line-height: 2.2; margin-bottom: 12px; }
@@ -531,7 +547,8 @@ function renderCopy(area, s) {
     '<div class="pcard">' +
     '<div class="card-meta">① 見て入力 ／ ' + (idx+1) + ' of ' + sentences.length + '</div>' +
     '<div class="ja-text">' + s.ja + '</div>' +
-    '<div class="cn-big">' + s.cn + '</div>' +
+    '<div class="cn-row"><div class="cn-big">' + s.cn + '</div>' +
+    '<button class="btn-speak" onclick="speak(\'' + esc(s.cn).replace(/'/g,"\\'") + '\')">🔊</button></div>' +
     '<div class="py-text">' + s.pinyin + '</div>' +
     '<input class="ans-inp ' + icls(p) + '" id="ans" type="text" placeholder="ピン音を見ながら中国語を入力…"' +
     ' value="' + (p!==null?esc(s.cn):'') + '"' + (p!==null?' readonly':'') + ' />' +
@@ -551,7 +568,9 @@ function renderBlank(area, s) {
     '<div class="pcard">' +
     '<div class="card-meta">② 穴埋め ／ ' + (idx+1) + ' of ' + sentences.length + '</div>' +
     '<div class="ja-text">' + s.ja + '</div>' +
-    '<div class="blank-line">' + esc(pre) + '<span class="blank-slot">' + slot + '</span>' + esc(tail) + '</div>' +
+    '<div class="blank-line">' + esc(pre) + '<span class="blank-slot">' + slot + '</span>' + esc(tail) +
+    (p!==null ? ' <button class="btn-speak" onclick="speak(\'' + esc(s.cn).replace(/'/g,"\\'") + '\')">🔊</button>' : '') +
+    '</div>' +
     '<div class="py-text">' + s.pinyin + '</div>' +
     '<input class="ans-inp ' + icls(p) + '" id="ans" type="text" placeholder="空欄に入る中国語を入力…"' +
     ' value="' + (p!==null?esc(key):'') + '"' + (p!==null?' readonly':'') + ' />' +
@@ -572,7 +591,7 @@ function renderFull(area, s) {
     '<div class="ja-text" style="font-size:1.05rem;font-weight:600;color:var(--ink);margin-bottom:16px;">' + s.ja + '</div>' +
     '<input class="ans-inp ' + icls(p) + '" id="ans" type="text" placeholder="日本語を見て中国語を全文入力…"' +
     ' value="' + (p!==null?esc(s.cn):'') + '"' + (p!==null?' readonly':'') + ' />' +
-    (p!==null ? '<div style="margin-top:10px;"><div class="py-text">' + s.pinyin + '</div><div class="cn-big" style="margin-bottom:0;">' + s.cn + '</div></div>' : '') +
+    (p!==null ? '<div style="margin-top:10px;"><div class="py-text">' + s.pinyin + '</div><div class="cn-row"><div class="cn-big" style="margin-bottom:0;">' + s.cn + '</div><button class="btn-speak" onclick="speak(\'' + esc(s.cn).replace(/'/g,"\\'") + '\')">🔊</button></div></div>' : '') +
     '<div class="feedback ' + fcls(p) + '">' + fbody(p, s.cn) + '</div>' +
     '<div class="btn-row">' + btns('chkFull','shoFull') + '</div>' +
     '</div>' + nav() + (allDone()?score():'');
@@ -608,6 +627,30 @@ function normalize(s) {
     .replace(/\s+/g, ' ')
     // 文末句読点を除去（。？！.?!）
     .replace(/[。？！.?!]+$/, '');
+}
+
+// 音声読み上げ（Web Speech API）
+let cnVoice = null;
+function loadVoices() {
+  const voices = speechSynthesis.getVoices();
+  cnVoice = voices.find(v => v.lang === 'zh-CN') || voices.find(v => v.lang.startsWith('zh')) || null;
+}
+if (typeof speechSynthesis !== 'undefined') {
+  loadVoices();
+  speechSynthesis.onvoiceschanged = loadVoices;
+}
+
+function speak(text) {
+  if (typeof speechSynthesis === 'undefined') {
+    alert('お使いのブラウザは音声読み上げに対応していません。');
+    return;
+  }
+  speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'zh-CN';
+  if (cnVoice) utter.voice = cnVoice;
+  utter.rate = 0.85;
+  speechSynthesis.speak(utter);
 }
 
 // ユーティリティ
